@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BOLA y permisos en AWS: demo del Burp Suite Day Perú 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;800&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0E0E10;--panel:#17171B;--line:#2B2B32;--tx:#F4F4F5;--mu:#A1A1AA;--red:#E5322D;--ok:#2DD4A0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--tx);font:18px/1.55 "Source Sans 3",system-ui,sans-serif}
+main{max-width:980px;margin:auto;padding:0 20px 56px;border-top:6px solid var(--red)}
+h1{font:800 clamp(28px,5vw,46px)/1.08 Archivo,system-ui,sans-serif;margin:36px 0 12px;max-width:18em}
+h2{font:800 22px/1.2 Archivo,system-ui,sans-serif;margin:0 0 14px}
+.lead{color:var(--mu);max-width:42em;margin:0 0 28px}
+[role=tablist]{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap}
+[role=tab]{font:600 17px "Source Sans 3",sans-serif;color:var(--mu);background:none;border:1px solid var(--line);border-radius:999px;padding:9px 20px;cursor:pointer}
+[role=tab][aria-selected=true]{background:var(--red);border-color:var(--red);color:#fff}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.grid{display:grid;gap:20px;grid-template-columns:1fr}
+@media(min-width:800px){.grid{grid-template-columns:5fr 6fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+label{display:block;color:var(--mu);font-size:15px;margin:14px 0 5px}
+select,input{width:100%;font:inherit;color:var(--tx);background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;font:600 16px "Source Sans 3",sans-serif;color:var(--mu);background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;cursor:pointer}
+.seg button[aria-pressed=true]{color:#fff;border-color:var(--red);box-shadow:inset 0 0 0 1px var(--red)}
+.go{margin-top:18px;width:100%;font:800 17px Archivo,sans-serif;color:#fff;background:var(--red);border:0;border-radius:8px;padding:13px;cursor:pointer}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.acts button{font:600 16px "Source Sans 3",sans-serif;color:var(--tx);background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;cursor:pointer}
+.acts .wide{grid-column:1/-1;border-style:dashed}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;font:15px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#E4E4E7}
+.status{font:800 28px Archivo,sans-serif;margin:0 0 8px}
+.msg{margin:14px 0 0;padding:12px 14px;border-radius:8px;border-left:5px solid var(--line);background:var(--ink)}
+.bad{border-color:var(--red)} .bad .status,.bad .t{color:var(--red)}
+.good{border-color:var(--ok)} .good .status,.good .t{color:var(--ok)}
+.card.bad,.card.good{border-width:2px}
+.note{color:var(--mu);font-size:15px;margin:14px 0 0}
+.code{margin-top:20px}.code h3{font:600 16px "Source Sans 3",sans-serif;color:var(--mu);margin:0 0 8px}
+ul.log{list-style:none;margin:0;padding:0;font-size:15px;color:var(--mu)}
+ul.log li{padding:6px 0;border-top:1px solid var(--line)}
+footer{margin-top:40px;color:var(--mu);font-size:15px;max-width:44em}
+</style>
+</head>
+<body>
+<main>
+<h1>Cambiar un número en la URL basta para ver datos ajenos</h1>
+<p class="lead">Dos simulaciones de lo que aprendí en el Burp Suite Day Perú 2026: el fallo BOLA en una API y los permisos mínimos en AWS. Es una demostración didáctica con datos ficticios.</p>
+
+<div role="tablist">
+  <button role="tab" id="t1" aria-selected="true" aria-controls="p1">API con BOLA</button>
+  <button role="tab" id="t2" aria-selected="false" aria-controls="p2">Permisos en AWS</button>
+</div>
+
+<section id="p1" role="tabpanel" aria-labelledby="t1">
+  <div class="grid">
+    <div class="card">
+      <h2>Tu petición</h2>
+      <label for="who">Sesión iniciada como</label>
+      <select id="who"><option>Ana</option><option selected>Luis</option><option>Marta</option></select>
+      <label>Versión de la API</label>
+      <div class="seg"><button id="vv" aria-pressed="true">Vulnerable</button><button id="vs" aria-pressed="false">Segura</button></div>
+      <label for="cid">ID de la cuenta</label>
+      <input id="cid" value="102" inputmode="numeric">
+      <button class="go" id="send">Enviar la petición</button>
+      <p class="note">Eres Luis y tu cuenta es la 102. Cambia el ID a 101 o 103 y compara las dos versiones.</p>
+    </div>
+    <div class="card" id="res">
+      <h2>Respuesta del servidor</h2>
+      <p class="status" id="st">Sin enviar</p>
+      <pre id="req">GET /cuentas/102</pre>
+      <pre id="body"></pre>
+      <p class="msg" id="msg">Envía una petición para ver qué responde la API.</p>
+    </div>
+  </div>
+  <div class="card code"><h3 id="ch">Código del servidor (Spring Boot): versión vulnerable</h3><pre id="code"></pre>
+    <p class="note" id="cn"></p></div>
+</section>
+
+<section id="p2" role="tabpanel" aria-labelledby="t2" hidden>
+  <div class="grid">
+    <div class="card">
+      <h2>Configuración</h2>
+      <label for="cred">Credenciales de la aplicación</label>
+      <select id="cred"><option value="user">Usuario IAM con llaves fijas</option><option value="role">Rol IAM con credenciales temporales</option></select>
+      <label for="pol">Policy asignada</label>
+      <select id="pol"><option value="min">Mínimo privilegio (solo GetItem)</option><option value="star">Acceso total (*)</option></select>
+      <label for="actor">Quién usa las credenciales</label>
+      <select id="actor"><option value="app">Mi aplicación</option><option value="att">Un atacante que las robó</option></select>
+      <label for="hrs">Tiempo desde el robo</label>
+      <select id="hrs"><option value="0">Recién robadas</option><option value="2">Pasaron 2 horas</option></select>
+      <div class="acts" role="group" aria-label="Acciones sobre la tabla Pedidos">
+        <button data-a="GetItem">Leer un pedido</button><button data-a="PutItem">Escribir un pedido</button>
+        <button data-a="DeleteItem">Borrar un pedido</button><button data-a="DeleteTable">Borrar la tabla</button>
+        <button class="wide" id="canary">Tocar la llave señuelo (canary token)</button>
+      </div>
+      <p class="note" id="info"></p>
+    </div>
+    <div>
+      <div class="card" id="ares"><h2>Resultado</h2><p class="status" id="ast">Sin ejecutar</p>
+        <p class="msg" id="amsg">Elige una acción para ver si AWS la permitiría.</p></div>
+      <div class="card" style="margin-top:20px"><h2>Policy en uso</h2><pre id="pjson"></pre></div>
+      <div class="card" style="margin-top:20px"><h2>Registro de actividad (como CloudTrail)</h2><ul class="log" id="log"><li>Aún no hay eventos.</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<footer>Demostración educativa con datos ficticios; no usa AWS real. Hecha por Pedro Jaramillo Rojas Agapito, estudiante de Ingeniería de Sistemas. La versión completa de la API en Spring Boot estará en GitHub.</footer>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+/* Pestañas */
+function tab(n){for(const i of [1,2]){$('#t'+i).setAttribute('aria-selected',i===n);$('#p'+i).hidden=i!==n}}
+$('#t1').onclick=()=>tab(1);$('#t2').onclick=()=>tab(2);
+
+/* 1. BOLA */
+const DB={101:{t:'Ana',s:5200},102:{t:'Luis',s:830},103:{t:'Marta',s:12400}};
+const CODE={
+vuln:'@GetMapping("/cuentas/{id}")\nCuenta ver(@PathVariable Long id) {\n  return repo.findById(id).orElseThrow();\n}',
+sec:'@GetMapping("/cuentas/{id}")\nCuenta ver(@PathVariable Long id, Principal usuario) {\n  Cuenta c = repo.findById(id).orElseThrow();\n  if (!c.getTitular().equals(usuario.getName()))\n    throw new ResponseStatusException(FORBIDDEN);\n  return c;\n}'};
+const NOTE={vuln:'Entrega la cuenta que se pida, sin comprobar de quién es.',sec:'Compara el titular de la cuenta con el usuario de la sesión, y esa comprobación ocurre en el servidor.'};
+let ver='vuln';
+function setVer(v){ver=v;$('#vv').setAttribute('aria-pressed',v==='vuln');$('#vs').setAttribute('aria-pressed',v==='sec');
+ $('#ch').textContent='Código del servidor (Spring Boot): versión '+(v==='vuln'?'vulnerable':'segura');
+ $('#code').textContent=CODE[v];$('#cn').textContent=NOTE[v]}
+$('#vv').onclick=()=>setVer('vuln');$('#vs').onclick=()=>setVer('sec');setVer('vuln');
+$('#send').onclick=()=>{
+ const u=$('#who').value,id=$('#cid').value.trim(),c=DB[id];let st,body,msg,cls='';
+ if(!c){st='404 No encontrada';body={error:'La cuenta no existe'};msg='No existe una cuenta con ese ID.'}
+ else if(ver==='vuln'||c.t===u){st='200 OK';body={id:+id,titular:c.t,saldo:c.s};
+  if(c.t!==u){cls='bad';msg='BOLA: la API no comprobó de quién es la cuenta. '+u+' acaba de ver los datos de '+c.t+'.'}
+  else msg='Correcto: es tu propia cuenta.'}
+ else{st='403 Prohibido';body={error:'Forbidden'};cls='good';msg='El servidor comprobó que la cuenta '+id+' no es de '+u+' y bloqueó la petición.'}
+ $('#res').className='card '+cls;$('#st').textContent=st;
+ $('#req').textContent='GET /cuentas/'+id;$('#body').textContent=JSON.stringify(body,null,2);$('#msg').textContent=msg};
+
+/* 2. Permisos en AWS */
+const ARN='arn:aws:dynamodb:us-east-1:123456789012:table/Pedidos';
+const POL={min:{Version:'2012-10-17',Statement:[{Effect:'Allow',Action:['dynamodb:GetItem'],Resource:ARN}]},
+ star:{Version:'2012-10-17',Statement:[{Effect:'Allow',Action:'*',Resource:'*'}]}};
+const INFO={user:'Las llaves fijas (Access Key y Secret Key) siguen siendo válidas hasta que alguien las desactiva.',
+ role:'El rol entrega credenciales temporales que vencen solas. En esta simulación duran una hora.'};
+function refresh(){$('#pjson').textContent=JSON.stringify(POL[$('#pol').value],null,2);$('#info').textContent=INFO[$('#cred').value]}
+['#cred','#pol'].forEach(s=>$(s).onchange=refresh);refresh();
+function log(txt){const ul=$('#log');
+ if(ul.children.length===1&&ul.firstChild.textContent==='Aún no hay eventos.')ul.innerHTML='';
+ const li=document.createElement('li');li.textContent=new Date().toLocaleTimeString('es-PE')+'  '+txt;ul.prepend(li)}
+function who(){return($('#cred').value==='user'?'usuario-iam/app-pedidos':'rol/app-pedidos')+' ('+($('#actor').value==='att'?'atacante':'aplicación')+')'}
+function show(ok,head,msg){$('#ares').className='card '+(ok?'good':'bad');$('#ast').textContent=head;$('#amsg').textContent=msg}
+document.querySelectorAll('.acts [data-a]').forEach(b=>b.onclick=()=>{
+ const a=b.dataset.a,att=$('#actor').value==='att',expired=att&&$('#cred').value==='role'&&+$('#hrs').value>=1;
+ const L=[].concat(POL[$('#pol').value].Statement[0].Action),ok=!expired&&(L.includes('*')||L.includes('dynamodb:'+a));
+ const why=expired?'ExpiredToken: las credenciales temporales del rol ya vencieron.':ok?'La policy permite dynamodb:'+a+'.':'AccessDenied: la policy no incluye dynamodb:'+a+'.';
+ show(ok,ok?'Permitido':'Denegado',why+(ok&&att&&a!=='GetItem'?' Con acceso total, el atacante puede modificar o destruir datos.':''));
+ log(who()+' '+a+' '+(ok?'permitido':'denegado'))});
+$('#canary').onclick=()=>{show(false,'Alerta enviada','SNS y SES avisaron al equipo: alguien usó la llave señuelo desde 203.0.113.7. No daba acceso a nada real, pero dejó huella de lo que intentó.');
+ log('llave-señuelo desde 203.0.113.7: alerta enviada')};
+</script>
+</body>
+</html>
